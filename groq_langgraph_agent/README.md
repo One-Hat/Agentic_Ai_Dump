@@ -1,6 +1,6 @@
 # 🤖 Open-Source Adaptive RAG Agent (LangGraph + Groq)
 
-An agentic AI application built using **LangGraph** and open-source models (such as `qwen/qwen3.8-27b`) running on **Groq's high-speed free LPU inference**.
+An agentic AI application built using **LangGraph** and open-source models (such as `qwen/qwen3.8-27b`) running on **Groq's high-speed free LPU inference**, complete with a modern **Streamlit Web UI**.
 
 It implements an **Adaptive RAG (Retrieval-Augmented Generation)** pattern with automated relevance grading, dynamic query transformation, live web/encyclopedia search fallback, and self-correcting hallucination checks.
 
@@ -52,8 +52,17 @@ EMBEDDING_MODEL_ID=sentence-transformers/all-MiniLM-L6-v2
 pip install -r requirements.txt
 ```
 
-### 3. Run the Agent
-- **Interactive Mode**:
+### 3. Run the Streamlit Web Application 🌐
+Launch the interactive web UI:
+```bash
+streamlit run app.py
+```
+Open [http://localhost:8501](http://localhost:8501) in your browser to interact with the agent, view real-time execution steps, inspect retrieved sources, and explore the architecture.
+
+---
+
+### 💻 CLI Runner (Alternative)
+- **Interactive Terminal Mode**:
   ```bash
   python main.py
   ```
