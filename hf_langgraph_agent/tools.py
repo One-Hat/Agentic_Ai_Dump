@@ -1,11 +1,14 @@
 import os
+import json
+import re
+import urllib.request
+import urllib.parse
 from typing import List
 from langchain_core.documents import Document
 from langchain_community.vectorstores import Chroma
-from duckduckgo_search import DDGS
 from models import get_embeddings_model
 
-# Default knowledge base articles for the Adaptive RAG demo
+# Default knowledge base articles for the Adaptive RAG system
 SAMPLE_DOCUMENTS = [
     Document(
         page_content=(
@@ -25,11 +28,11 @@ SAMPLE_DOCUMENTS = [
     ),
     Document(
         page_content=(
-            "Open-source AI models hosted on Hugging Face—such as Llama 3.1, Qwen 2.5, and Mistral—provide state-of-the-art "
-            "reasoning capabilities. Hugging Face Serverless Inference API allows developers to run inference on these "
-            "models without maintaining dedicated GPU infrastructure."
+            "Open-source AI models such as Qwen 2.5/3, Llama 3.1/3.3, and Mistral provide state-of-the-art "
+            "reasoning capabilities. Hosted on ultra-fast LPU inference engines like Groq, they achieve "
+            "hundreds of tokens per second for real-time agentic decision loops."
         ),
-        metadata={"source": "huggingface_models.md", "topic": "Open Source AI"}
+        metadata={"source": "open_source_models.md", "topic": "Open Source AI"}
     ),
     Document(
         page_content=(
@@ -57,26 +60,66 @@ def get_retriever():
         )
     return _vectorstore.as_retriever(search_kwargs={"k": 2})
 
-def search_web(query: str, max_results: int = 3) -> List[Document]:
+def _search_wikipedia(query: str, max_results: int = 3) -> List[Document]:
     """
-    Executes a web search fallback using DuckDuckGo.
+    Reliable encyclopedia search fallback using Wikipedia's public REST API.
     """
     results = []
     try:
-        ddgs = DDGS()
-        search_data = ddgs.text(query, max_results=max_results)
-        for item in search_data:
-            results.append(
-                Document(
-                    page_content=item.get("body", ""),
-                    metadata={"source": item.get("href", "web_search"), "title": item.get("title", "")}
+        clean_q = re.sub(r"[^\w\s]", "", query).strip()
+        encoded = urllib.parse.quote(clean_q)
+        url = f"https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch={encoded}&format=json&utf8=1"
+        req = urllib.request.Request(url, headers={"User-Agent": "AdaptiveRAGAgent/1.0"})
+        with urllib.request.urlopen(req, timeout=6) as response:
+            data = json.loads(response.read().decode("utf-8"))
+            items = data.get("query", {}).get("search", [])[:max_results]
+            for item in items:
+                title = item.get("title", "")
+                snippet = re.sub(r"<.*?>", "", item.get("snippet", ""))
+                results.append(
+                    Document(
+                        page_content=f"{title}: {snippet}",
+                        metadata={"source": f"https://en.wikipedia.org/wiki/{urllib.parse.quote(title)}", "title": title}
+                    )
                 )
-            )
     except Exception as e:
         results.append(
             Document(
-                page_content=f"Web search could not retrieve external results for '{query}'. Details: {str(e)}",
-                metadata={"source": "web_search_fallback"}
+                page_content=f"External knowledge retrieval encountered: {str(e)}",
+                metadata={"source": "external_search_error"}
             )
         )
+    return results
+
+def search_web(query: str, max_results: int = 3) -> List[Document]:
+    """
+    Searches external web sources using DuckDuckGo with Wikipedia fallback.
+    """
+    results = []
+    # 1. Attempt DuckDuckGo search
+    try:
+        try:
+            from ddgs import DDGS
+        except ImportError:
+            from duckduckgo_search import DDGS
+        
+        with DDGS(timeout=8) as ddgs:
+            search_data = list(ddgs.text(query, max_results=max_results))
+            for item in search_data:
+                body = item.get("body", "")
+                if body:
+                    results.append(
+                        Document(
+                            page_content=body,
+                            metadata={"source": item.get("href", "web_search"), "title": item.get("title", "")}
+                        )
+                    )
+    except Exception:
+        # Fall back gracefully if DuckDuckGo times out or rate limits
+        pass
+
+    # 2. If DDG produced no results, fall back to Wikipedia
+    if not results:
+        results = _search_wikipedia(query, max_results=max_results)
+
     return results

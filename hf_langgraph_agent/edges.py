@@ -24,7 +24,7 @@ def grade_generation_v_documents_and_question(state: GraphState) -> Literal["use
     Self-correction edge: Evaluates if the generated response is grounded in facts
     and addresses the original question.
     """
-    print("\n--- [EVALUATION] Checking response accuracy and hallucination ---")
+    print("\n--- [EVALUATION] Checking response accuracy and usefulness ---")
     generation = state["generation"]
     question = state.get("original_question", state["question"])
     documents = state["documents"]
@@ -37,32 +37,33 @@ def grade_generation_v_documents_and_question(state: GraphState) -> Literal["use
     llm = get_chat_model(temperature=0.0)
     context_str = "\n\n".join([doc.page_content for doc in documents])
 
-    # 1. Hallucination check
-    hallucination_prompt = (
-        f"You are an evaluator grading whether an answer is grounded in and supported by a set of facts.\n"
-        f"Facts:\n{context_str}\n\n"
-        f"Answer:\n{generation}\n\n"
-        f"Does the answer stay faithful to the facts? Reply with only 'yes' or 'no'."
-    )
-    h_res = llm.invoke([HumanMessage(content=hallucination_prompt)])
-    is_grounded = "yes" in h_res.content.strip().lower()
+    # 1. Hallucination check only if substantial retrieved context exists
+    if len(context_str.strip()) > 50:
+        hallucination_prompt = (
+            f"You are an evaluator grading whether an answer contradicts the provided facts.\n"
+            f"Facts:\n{context_str}\n\n"
+            f"Answer:\n{generation}\n\n"
+            f"Does the answer directly contradict the facts? Reply 'yes' if it contradicts, or 'no' if it is faithful."
+        )
+        h_res = llm.invoke([HumanMessage(content=hallucination_prompt)])
+        contradicts = "yes" in h_res.content.strip().lower()
 
-    if not is_grounded:
-        print("  -> Self-Correction Alert: Output may contain unsupported claims.")
-        return "not useful"
+        if contradicts:
+            print("  -> Self-Correction Alert: Output contradicts provided context.")
+            return "not useful"
 
     # 2. Answer usefulness check
     usefulness_prompt = (
-        f"You are an evaluator grading whether an answer addresses the user question.\n"
+        f"You are an evaluator grading whether an answer helpfully addresses the user question.\n"
         f"Question:\n{question}\n\n"
         f"Answer:\n{generation}\n\n"
-        f"Does the answer directly answer the question? Reply with only 'yes' or 'no'."
+        f"Does the answer directly address and answer the user question? Reply with only 'yes' or 'no'."
     )
     u_res = llm.invoke([HumanMessage(content=usefulness_prompt)])
     is_useful = "yes" in u_res.content.strip().lower()
 
     if is_useful:
-        print("  -> Quality Verified: Generation is grounded and directly answers the question.")
+        print("  -> Quality Verified: Generation is helpful and directly answers the question.")
         return "useful"
     else:
         print("  -> Output did not completely address the question. Re-routing for query rewrite.")

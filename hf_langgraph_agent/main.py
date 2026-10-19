@@ -7,16 +7,14 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-from config import IS_CONFIGURED, MODEL_NAME, HF_MODEL_ID, USE_GROQ
+from config import IS_CONFIGURED, MODEL_NAME
 from graph import rag_app
 
 def print_banner():
-    active_model = MODEL_NAME if USE_GROQ else HF_MODEL_ID
-    provider = "Groq (Free Cloud LPU)" if USE_GROQ else "Hugging Face Inference"
     print("=" * 70)
     print("   [AGENT] OPEN-SOURCE ADAPTIVE RAG AGENT (LANGRAPH)")
-    print(f"   Provider : {provider}")
-    print(f"   Model    : {active_model}")
+    print("   Provider : Groq (Free Cloud LPU)")
+    print(f"   Model    : {MODEL_NAME}")
     print("=" * 70)
 
 def run_agent(question: str):
@@ -24,8 +22,8 @@ def run_agent(question: str):
     Executes the Adaptive RAG workflow for a given question.
     """
     if not IS_CONFIGURED:
-        print("\n[ERROR]: API key is missing!")
-        print("Please copy .env.example to .env and set your GROQ_API_KEY (or HUGGINGFACEHUB_API_TOKEN):")
+        print("\n[ERROR]: GROQ_API_KEY is missing!")
+        print("Please set your GROQ_API_KEY in the .env file:")
         print("  1. Visit: https://console.groq.com/keys")
         print("  2. Create a free API key")
         print("  3. Set GROQ_API_KEY=gsk_... in .env\n")

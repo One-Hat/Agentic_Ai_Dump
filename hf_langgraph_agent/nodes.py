@@ -72,13 +72,12 @@ def transform_query(state: GraphState) -> Dict[str, Any]:
     llm = get_chat_model(temperature=0.2)
 
     prompt = (
-        f"You are a query optimizer. The following query failed to retrieve sufficient internal documents.\n"
-        f"Rewrite it into a clear, concise keyword-rich search query suitable for web search.\n\n"
-        f"Original Query: {question}\n\n"
-        f"Optimized Query (reply with only the rewritten query, nothing else):"
+        f"You are a search query optimizer. The user asked:\n'{question}'\n\n"
+        f"Generate a clean, targeted search query (2-4 key words) to find accurate factual information on this topic.\n"
+        f"Output ONLY the search query keywords, nothing else."
     )
     response = llm.invoke([HumanMessage(content=prompt)])
-    better_question = response.content.strip()
+    better_question = response.content.strip().strip('"').strip("'")
     print(f"  -> Rewritten query: '{better_question}' (Iteration {iterations})")
 
     return {
@@ -88,7 +87,7 @@ def transform_query(state: GraphState) -> Dict[str, Any]:
 
 def web_search_node(state: GraphState) -> Dict[str, Any]:
     """
-    Executes live web search to complement or replace missing local context.
+    Executes live search to complement or replace missing local context.
     """
     print("\n--- [NODE: WEB SEARCH] Running live web search ---")
     question = state["question"]
@@ -107,19 +106,21 @@ def generate(state: GraphState) -> Dict[str, Any]:
     print("\n--- [NODE: GENERATE] Synthesizing final answer ---")
     question = state.get("original_question", state["question"])
     documents = state["documents"]
-    llm = get_chat_model(temperature=0.1, max_new_tokens=768)
+    llm = get_chat_model(temperature=0.2, max_new_tokens=768)
 
     context_str = "\n\n".join([f"Source [{doc.metadata.get('source', 'unknown')}]:\n{doc.page_content}" for doc in documents])
     
     system_msg = (
-        "You are an expert AI assistant specializing in Agentic AI and open-source models. "
-        "Answer the user's question accurately and concisely, basing your response on the provided context. "
-        "If the context does not contain sufficient facts to answer completely, acknowledge what is known and clarify limits."
+        "You are an intelligent, helpful AI assistant built on LangGraph. "
+        "Provide a clear, articulate, and accurate answer to the user's question. "
+        "Ground your answer in the provided context whenever relevant facts are present. "
+        "If the context is incomplete or sparse, seamlessly incorporate your foundational knowledge "
+        "to deliver a complete and insightful explanation."
     )
     user_msg = (
-        f"Context:\n{context_str}\n\n"
+        f"Retrieved Context:\n{context_str}\n\n"
         f"User Question:\n{question}\n\n"
-        f"Synthesized Answer:"
+        f"Answer:"
     )
 
     response = llm.invoke([SystemMessage(content=system_msg), HumanMessage(content=user_msg)])
